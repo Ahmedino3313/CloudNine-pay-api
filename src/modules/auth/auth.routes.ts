@@ -8,13 +8,16 @@ const router = Router();
 const registerValidation = [
     body("fullName")
         .trim()
+        .escape()
         .notEmpty()
         .withMessage("Full name is required"),
     body("email")
+        .trim()
         .isEmail()
         .normalizeEmail()
         .withMessage("Valid email is required"),
     body("phone")
+        .trim()
         .matches(/^0[789][01]\d{8}$/)
         .withMessage("Valid Nigerian phone number is required"),
     body("password")
