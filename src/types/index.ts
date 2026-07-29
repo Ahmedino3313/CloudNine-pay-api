@@ -63,6 +63,7 @@ export interface InitiateConversionDto {
 export interface WithdrawDto {
     amount: number;
     bankName: string;
+    bankCode: string;
     accountNumber: string;
     accountName: string;
     transactionPin: string;

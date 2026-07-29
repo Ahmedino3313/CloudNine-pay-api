@@ -78,6 +78,13 @@ async function seed() {
     console.log("Demo customer created");
     console.log(`Email: ${process.env.DEMO_EMAIL}`);
 
+    // Promote demo user to ADMIN for testing
+    await prisma.user.update({
+    where: { email: process.env.DEMO_EMAIL! },
+    data: { role: "ADMIN" },
+    });
+    console.log("Demo user promoted to ADMIN");
+
     console.log("\n🎉 Seeding complete!");
 }
 

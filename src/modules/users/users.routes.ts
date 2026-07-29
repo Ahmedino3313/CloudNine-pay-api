@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { body } from "express-validator";
-import { getProfile, updateProfile, changePassword, deleteAccount, } from "./users.controller";
+import { getProfile, updateProfile, changePassword, deleteAccount, getSecurityStatus, } from "./users.controller";
 import { protect } from "../../middleware/auth.middleware";
 
 const router = Router();
@@ -52,5 +52,7 @@ router.delete(
     ],
     deleteAccount
 );
+
+router.get("/security", getSecurityStatus);
 
 export default router;

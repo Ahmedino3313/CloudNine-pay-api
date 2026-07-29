@@ -2,6 +2,7 @@ import { Response } from "express";
 import bcrypt from "bcryptjs";
 import prisma from "../../config/prisma";
 import { sendSuccess, sendError, generateReference } from "../../utils/response";
+import { createTransferRecipient, initiateTransfer, } from "../../config/paystack";
 import { AuthenticatedRequest, WithdrawDto } from "../../types";
 
 export const requestWithdrawal = async (
@@ -10,11 +11,12 @@ export const requestWithdrawal = async (
     ): Promise<void> => {
     try {
         const {
-            amount,
-            bankName,
-            accountNumber,
-            accountName,
-            transactionPin,
+        amount,
+        bankName,
+        bankCode,
+        accountNumber,
+        accountName,
+        transactionPin,
         }: WithdrawDto = req.body;
 
         const userId = req.user!.userId;
@@ -24,93 +26,115 @@ export const requestWithdrawal = async (
         return;
         }
 
-        // Get user and check if they have a transaction PIN set
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) {
         sendError(res, "User not found.", 404);
         return;
         }
 
-        if (user.transactionPin) {
-        const pinValid = await bcrypt.compare(
-            String(transactionPin),
-            user.transactionPin
-        );
-        if (!pinValid) {
-            sendError(res, "Invalid transaction PIN.", 401);
-            return;
-        }
-        }
+        if (!user.transactionPin) {
+                sendError(
+                    res,
+                    "Please set up a transaction PIN before withdrawing.",
+                    400
+                );
+                return;
+            }
 
-        // Check wallet balance
+            const pinValid = await bcrypt.compare(
+                String(transactionPin),
+                user.transactionPin
+            );
+            if (!pinValid) {
+                sendError(res, "Invalid transaction PIN.", 401);
+                return;
+            }
+
         const wallet = await prisma.wallet.findUnique({ where: { userId } });
-        if (!wallet || wallet.balance < amount) {
-        sendError(res, "Insufficient wallet balance.", 400);
-        return;
+            if (!wallet || wallet.balance < amount) {
+            sendError(res, "Insufficient wallet balance.", 400);
+            return;
         }
 
         const reference = generateReference("WD");
 
-        // Debit wallet, create withdrawal and transaction record all at once
+        // Debit wallet immediately
         await prisma.$transaction(async (tx) => {
-        await tx.wallet.update({
-            where: { userId },
-            data: { balance: { decrement: amount } },
+            await tx.wallet.update({
+                where: { userId },
+                data: { balance: { decrement: amount } },
+            });
+
+            await tx.withdrawal.create({
+                data: {
+                userId,
+                amount,
+                bankName,
+                accountNumber,
+                accountName,
+                status: "PENDING",
+                reference,
+                },
+            });
+
+            await tx.transaction.create({
+                data: {
+                userId,
+                type: "WITHDRAWAL",
+                amount,
+                status: "PENDING",
+                reference,
+                description: `Withdrawal to ${bankName} — ${accountNumber}`,
+                },
+            });
+
+            await tx.notification.create({
+                data: {
+                userId,
+                title: "Withdrawal Initiated!",
+                message: `₦${amount.toLocaleString()} withdrawal to ${bankName} is being processed.`,
+                type: "info",
+                },
+            });
         });
 
-        await tx.withdrawal.create({
-            data: {
-            userId,
-            amount,
-            bankName,
-            accountNumber,
+        // Try to send the money via Paystack
+        try {
+        const recipientCode = await createTransferRecipient(
             accountName,
-            status: "PENDING",
-            reference,
-            },
-        });
+            accountNumber,
+            bankCode
+        );
 
-        await tx.transaction.create({
-            data: {
-            userId,
-            type: "WITHDRAWAL",
+        await initiateTransfer(
+            recipientCode,
             amount,
-            status: "PENDING",
-            reference,
-            description: `Withdrawal to ${bankName} — ${accountNumber}`,
-            },
-        });
+            `CloudNine Pay withdrawal — ${reference}`
+        );
 
-        await tx.notification.create({
-            data: {
-            userId,
-            title: "Withdrawal Initiated",
-            message: `₦${amount.toLocaleString()} withdrawal to ${bankName} is being processed.`,
-            type: "info",
-            },
+        // Mark as processing once transfer is initiated
+        await prisma.withdrawal.update({
+            where: { reference },
+            data: { status: "PROCESSING" },
         });
-        });
+        } catch (transferErr) {
+        console.error("Paystack transfer error:", transferErr);
+        // We don't fail the request — withdrawal stays PENDING for manual review
+        }
 
         sendSuccess(
         res,
         "Withdrawal initiated. Processing within 30 minutes.",
-        {
-            reference,
-            amount,
-            bankName,
-            accountNumber,
-            accountName,
-            status: "PENDING",
-        },
+        { reference, amount, bankName, accountNumber, accountName, status: "PROCESSING" },
         201
         );
     } catch (err) {
         console.error("Withdrawal error:", err);
         sendError(res, "Withdrawal failed. Please try again.", 500);
     }
-    };
+};
 
-    export const getWithdrawals = async (
+export const getWithdrawals = async (
     req: AuthenticatedRequest,
     res: Response
     ): Promise<void> => {
@@ -120,7 +144,6 @@ export const requestWithdrawal = async (
         orderBy: { createdAt: "desc" },
         take: 20,
         });
-
         sendSuccess(res, "Withdrawals fetched.", withdrawals);
     } catch {
         sendError(res, "Failed to fetch withdrawals.", 500);
@@ -133,21 +156,17 @@ export const requestWithdrawal = async (
     ): Promise<void> => {
     try {
         const { pin } = req.body;
-
         if (!/^\d{4}$/.test(pin)) {
-        sendError(res, "PIN must be exactly 4 digits.", 400);
-        return;
+            sendError(res, "PIN must be exactly 4 digits.", 400);
+            return;
         }
-
         const hashed = await bcrypt.hash(pin, 12);
-
         await prisma.user.update({
         where: { id: req.user!.userId },
         data: { transactionPin: hashed },
         });
-
         sendSuccess(res, "Transaction PIN set successfully.");
     } catch {
         sendError(res, "Failed to set PIN.", 500);
     }
-    };
+};

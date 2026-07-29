@@ -4,7 +4,7 @@ import { sendSuccess, sendError } from "../../utils/response";
 import { debitWallet } from "../wallet/wallet.controller";
 import { AuthenticatedRequest, BuyDataDto } from "../../types";
 
-// Data plans per network well swap it later
+// Data plans per network we'll swap it later
 const DATA_PLANS: Record<string, { code: string; name: string; amount: number }[]> = {
     MTN: [
         { code: "mtn-100mb-1day", name: "100MB - 1 Day", amount: 100 },

@@ -39,14 +39,14 @@ export const createVirtualAccount = async (
     const { data } = await axios.post(
         `${MONNIFY_BASE_URL}/api/v2/bank-transfer/reserved-accounts`,
         {
-        accountReference: userId,
-        accountName: fullName,
-        currencyCode: "NGN",
-        contractCode: MONNIFY_CONTRACT_CODE,
-        customerEmail: email,
-        customerName: fullName,
-        getAllAvailableBanks: false,
-        preferredBanks: ["035"], // Wema Bank (ALAT)
+            accountReference: userId,
+            accountName: fullName,
+            currencyCode: "NGN",
+            contractCode: MONNIFY_CONTRACT_CODE,
+            customerEmail: email,
+            customerName: fullName,
+            getAllAvailableBanks: false,
+            preferredBanks: ["035"], // Wema Bank (ALAT)
         },
         {
         headers: {

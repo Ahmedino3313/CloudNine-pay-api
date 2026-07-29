@@ -23,6 +23,8 @@ router.patch("/conversions/:id/reject", rejectConversion);
 // Rates
 router.patch(
     "/rates",
+    protect,
+    requireRole("SUPER_ADMIN"),
     [
         body("network")
         .isIn(["MTN", "AIRTEL", "GLO", "NINE_MOBILE"])

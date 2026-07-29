@@ -146,3 +146,26 @@ export const deleteAccount = async (
         sendError(res, "Failed to delete account.", 500);
     }
 };
+
+export const getSecurityStatus = async (
+    req: AuthenticatedRequest,
+    res: Response
+    ): Promise<void> => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user!.userId },
+        });
+
+        if (!user) {
+            sendError(res, "User not found.", 404);
+        return;
+        }
+
+        sendSuccess(res, "Security status fetched.", {
+            hasPin: !!user.transactionPin,
+            isVerified: user.isVerified,
+        });
+    } catch {
+        sendError(res, "Failed to fetch security status.", 500);
+    }
+};

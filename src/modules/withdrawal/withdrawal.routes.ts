@@ -13,21 +13,12 @@ router.get("/", getWithdrawals);
 router.post(
     "/",
     [
-        body("amount")
-        .isFloat({ min: 500 })
-        .withMessage("Minimum withdrawal is ₦500"),
-        body("bankName")
-        .notEmpty()
-        .withMessage("Bank name is required"),
-        body("accountNumber")
-        .matches(/^\d{10}$/)
-        .withMessage("Account number must be exactly 10 digits"),
-        body("accountName")
-        .notEmpty()
-        .withMessage("Account name is required"),
-        body("transactionPin")
-        .notEmpty()
-        .withMessage("Transaction PIN is required"),
+        body("amount").isFloat({ min: 500 }).withMessage("Minimum withdrawal is ₦500"),
+        body("bankName").notEmpty().withMessage("Bank name is required"),
+        body("bankCode").notEmpty().withMessage("Bank code is required"),
+        body("accountNumber").matches(/^\d{10}$/).withMessage("Account number must be exactly 10 digits"),
+        body("accountName").notEmpty().withMessage("Account name is required"),
+        body("transactionPin").notEmpty().withMessage("Transaction PIN is required"),
     ],
     requestWithdrawal
 );
@@ -35,9 +26,7 @@ router.post(
 router.post(
     "/set-pin",
     [
-        body("pin")
-        .matches(/^\d{4}$/)
-        .withMessage("PIN must be exactly 4 digits"),
+        body("pin").matches(/^\d{4}$/).withMessage("PIN must be exactly 4 digits"),
     ],
     setTransactionPin
 );

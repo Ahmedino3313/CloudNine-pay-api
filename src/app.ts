@@ -19,6 +19,7 @@ import transactionRoutes from "./modules/transactions/transactions.routes";
 import notificationRoutes from "./modules/notifications/notifications.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 import userRoutes from "./modules/users/users.routes";
+import bankRoutes from "./modules/bank/bank.routes";
 
 const app = express();
 
@@ -51,8 +52,8 @@ app.use(
 
 // ─── Rate Limiting ───────────────────────────
 const globalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100,
+    windowMs: 15 * 60 * 1000,
+    max: process.env.NODE_ENV === "development" ? 1000 : 100,
     message: {
         success: false,
         message: "Too many requests. Please try again later.",
@@ -63,13 +64,12 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10, // stricter limit for login and register
+    max: process.env.NODE_ENV === "development" ? 100 : 10,
     message: {
         success: false,
         message: "Too many attempts. Please wait 15 minutes.",
     },
 });
-
 app.use(globalLimiter);
 
 // ─── Body Parsing ────────────────────────────
@@ -100,6 +100,7 @@ app.use(`${API}/transactions`, transactionRoutes);
 app.use(`${API}/notifications`, notificationRoutes);
 app.use(`${API}/admin`, adminRoutes);
 app.use(`${API}/users`, userRoutes);
+app.use(`${API}/banks`, bankRoutes);
 
 // ─── 404 and Error Handler ───────────────────
 app.use(notFound);
