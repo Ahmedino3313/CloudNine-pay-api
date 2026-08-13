@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { body } from "express-validator";
-import { getAnalytics, getAllUsers, toggleUserStatus, getPendingConversions, approveConversion, rejectConversion, updateConversionRate, } from "./admin.controller";
+import { getAnalytics, getAllUsers, toggleUserStatus, getPendingConversions, approveConversion, rejectConversion, updateConversionRate, getRevenueAnalytics, getAppHealth,  getAllWithdrawals, updateWithdrawalStatus, getAuditLogs,} from "./admin.controller";
 import { protect, requireRole } from "../../middleware/auth.middleware";
+
 
 const router = Router();
 
@@ -10,6 +11,8 @@ router.use(protect, requireRole("ADMIN", "SUPER_ADMIN"));
 
 // Analytics
 router.get("/analytics", getAnalytics);
+router.get("/revenue", getRevenueAnalytics);
+router.get("/health", getAppHealth);
 
 // Users
 router.get("/users", getAllUsers);
@@ -19,6 +22,18 @@ router.patch("/users/:id/toggle-status", toggleUserStatus);
 router.get("/conversions/pending", getPendingConversions);
 router.patch("/conversions/:id/approve", approveConversion);
 router.patch("/conversions/:id/reject", rejectConversion);
+
+// Withdrawals
+router.get("/withdrawals", getAllWithdrawals);
+router.patch(
+    "/withdrawals/:id/status",
+    [
+        body("status")
+        .isIn(["PROCESSING", "COMPLETED", "FAILED"])
+        .withMessage("Invalid status"),
+    ],
+    updateWithdrawalStatus
+);
 
 // Rates
 router.patch(
@@ -35,5 +50,7 @@ router.patch(
     ],
     updateConversionRate
 );
+
+router.get("/audit-logs", getAuditLogs);
 
 export default router;

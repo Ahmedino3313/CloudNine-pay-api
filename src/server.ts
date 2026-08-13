@@ -15,7 +15,7 @@ async function main() {
         ╔═══════════════════════════════════════╗
         ║      CloudNine Pay API v1.0.0         ║
         ╠═══════════════════════════════════════╣
-        ║  Server  → http://localhost:${PORT}      ║
+        ║  Server  → http://localhost:${PORT}   ║
         ║  Health  → http://localhost:${PORT}/health ║
         ║  Env     → ${process.env.NODE_ENV}    ║
         ╚═══════════════════════════════════════╝

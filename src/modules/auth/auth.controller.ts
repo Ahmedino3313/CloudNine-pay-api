@@ -4,6 +4,9 @@ import prisma from "../../config/prisma";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt";
 import { sendSuccess, sendError } from "../../utils/response";
 import { AuthenticatedRequest, RegisterDto } from "../../types";
+import { sendEmail, otpEmailTemplate } from "../../config/email";
+import { createAuditLog } from "../../middleware/audit.middleware";
+import { sendSmsOtp } from "../../config/termii";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -37,7 +40,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
         // Check if user already exists
         const existing = await prisma.user.findFirst({
-        where: { OR: [{ email }, { phone }] },
+            where: { OR: [{ email }, { phone }] },
         });
 
         if (existing) {
@@ -51,55 +54,62 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         Number(process.env.BCRYPT_SALT_ROUNDS ?? 12)
         );
 
-        // Create user
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        // Create user — not verified yet
         const user = await prisma.user.create({
-        data: { fullName, email, phone, password: hashedPassword },
+            data: {
+                fullName,
+                email,
+                phone,
+                password: hashedPassword,
+                isVerified: false,
+                emailOtp: otp,
+                emailOtpExpiry: otpExpiry,
+            },
         });
 
         // Auto create wallet
         await prisma.wallet.create({ data: { userId: user.id } });
 
-        // Welcome notification
-        await prisma.notification.create({
-        data: {
-            userId: user.id,
-            title: "Welcome to CloudNine Pay!",
-            message: "Your account is ready. Start by converting airtime to cash!",
-            type: "success",
-        },
-        });
+        // Send OTP email
+        try {
+            await sendEmail(
+                user.email,
+                "Verify your CloudNine Pay account",
+                otpEmailTemplate(user.fullName, otp)
+            );
+        } catch (emailErr) {
+                console.error("OTP email failed:", emailErr);
+        }
 
-        // Sign tokens
-        const tokenPayload = { userId: user.id, email: user.email, role: user.role };
-        const accessToken = signAccessToken(tokenPayload);
-        const refreshToken = signRefreshToken(tokenPayload);
+        // Send OTP SMS
+        try {
+            await sendSmsOtp(user.phone, otp);
+        } catch (smsErr) {
+            console.error("OTP SMS failed:", smsErr);
+            // Don't fail registration if SMS fails
+        }
 
-        // Save refresh token
-        await prisma.user.update({
-            where: { id: user.id },
-            data: { refreshToken },
-        });
+        // Log the registration
+        await createAuditLog(
+            user.id,
+            "REGISTER",
+            "User",
+            user.id,
+            req.ip,
+            req.headers["user-agent"]
+        );
 
-        // Set cookies for web
-        setTokenCookies(res, accessToken, refreshToken);
-
-        // Also send in response body for mobile
+        // Send back userId only — no tokens yet
+        // Tokens are issued after OTP verification
         sendSuccess(
-            res,
-            "Account created successfully.",
-            {
-                accessToken,
-                refreshToken,
-                user: {
-                id: user.id,
-                fullName: user.fullName,
-                email: user.email,
-                phone: user.phone,
-                role: user.role,
-                isVerified: user.isVerified,
-                },
-            },
-            201
+        res,
+        "Account created. Please check your email for the verification code.",
+        { userId: user.id, email: user.email },
+        201
         );
     } catch (err) {
         console.error("Register error:", err);
@@ -113,17 +123,36 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
         // Find user by email or phone
         const user = await prisma.user.findFirst({
-        where: {
-            OR: [
-            { email: emailOrPhone },
-            { phone: emailOrPhone },
-            ],
-        },
+            where: {
+                OR: [
+                { email: emailOrPhone },
+                { phone: emailOrPhone },
+                ],
+            },
         });
 
+// Temporary debug log
+// console.log("Login attempt:", emailOrPhone);
+// console.log("User found:", user ? "yes" : "no");
+// console.log("User active:", user?.isActive);
+// console.log("User verified:", user?.isVerified);
+
         if (!user || !user.isActive) {
-        sendError(res, "Invalid email/phone or password.", 401);
-        return;
+            sendError(res, "Invalid email/phone or password.", 401);
+            return;
+        }
+
+        if (!user.isVerified) {
+            res.status(403).json({
+                success: false,
+                message: "Please verify your email first. Check your inbox for the verification code.",
+                data: {
+                    userId: user.id,
+                    email: user.email,
+                    isVerified: false,
+                },
+            });
+            return;
         }
 
         // Check password
@@ -152,19 +181,29 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         // Set cookies for web
         setTokenCookies(res, accessToken, refreshToken);
 
+        // Log the login
+        await createAuditLog(
+            user.id,
+            "LOGIN",
+            "User",
+            user.id,
+            req.ip,
+            req.headers["user-agent"]
+        );
+
         // Also send in response body for mobile
         sendSuccess(res, "Login successful.", {
-        accessToken,
-        refreshToken,
-        user: {
-            id: user.id,
-            fullName: user.fullName,
-            email: user.email,
-            phone: user.phone,
-            role: user.role,
-            isVerified: user.isVerified,
-            walletBalance: wallet?.balance ?? 0,
-        },
+            accessToken,
+            refreshToken,
+            user: {
+                id: user.id,
+                fullName: user.fullName,
+                email: user.email,
+                phone: user.phone,
+                role: user.role,
+                isVerified: user.isVerified,
+                walletBalance: wallet?.balance ?? 0,
+            },
         });
     } catch (err) {
         console.error("Login error:", err);
