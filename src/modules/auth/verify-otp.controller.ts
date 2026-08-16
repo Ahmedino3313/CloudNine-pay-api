@@ -47,12 +47,12 @@ export const verifyEmailOtp = async (
 
         // Mark as verified and clear OTP
         await prisma.user.update({
-        where: { id: userId },
-        data: {
-            isVerified: true,
-            emailOtp: null,
-            emailOtpExpiry: null,
-        },
+            where: { id: userId },
+            data: {
+                isVerified: true,
+                emailOtp: null,
+                emailOtpExpiry: null,
+            },
         });
 
         // Create welcome notification
@@ -70,7 +70,7 @@ export const verifyEmailOtp = async (
         try {
         await sendEmail(
             user.email,
-            "Welcome to CloudNine Pay! 🎉",
+            "Welcome to CloudNine Pay!",
             welcomeEmailTemplate(user.fullName)
         );
         } catch (emailErr) {
@@ -79,16 +79,16 @@ export const verifyEmailOtp = async (
 
         // Now issue tokens
         const tokenPayload = {
-        userId: user.id,
-        email: user.email,
-        role: user.role,
+            userId: user.id,
+            email: user.email,
+            role: user.role,
         };
         const accessToken = signAccessToken(tokenPayload);
         const refreshToken = signRefreshToken(tokenPayload);
 
         await prisma.user.update({
-        where: { id: user.id },
-        data: { refreshToken },
+            where: { id: user.id },
+            data: { refreshToken },
         });
 
         const wallet = await prisma.wallet.findUnique({
